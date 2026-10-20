@@ -2,7 +2,7 @@
 
 A practical, stage-by-stage guide to building production-grade Retrieval-Augmented Generation systems. Every technique is implemented as a small, focused, runnable Python file, so you can learn one idea at a time and inspect exactly what each stage produces.
 
-Part of the AI Engineer series: https://github.com/Itz-Me-Sumit/AI-Engineer
+Part of the AI Engineer series: https://github.com/Itz-Me-Sumit/AI-Engineering
 
 Prerequisite: the basics of LangChain, loaders, splitters, embeddings and retrievers are covered in https://github.com/Itz-Me-Sumit/GenAI
 
