@@ -24,7 +24,6 @@ sys.path.insert(0, str(ROOT))
 PDF_DIR = ROOT / "data" / "input" / "pdfs"
 
 
-
 def classify_line(line: str) -> str:
     """Classify an extracted PDF line by its visible structure.
     Args:
