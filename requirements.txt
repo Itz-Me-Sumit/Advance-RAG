@@ -1,0 +1,26 @@
+# Core/common tutorial environment
+langchain>=1.0,<2.0
+langchain-core>=1.0,<2.0
+langchain-openai>=1.0,<2.0
+langchain-openrouter
+langchain-community
+pypdf>=5.0,<7.0
+pymupdf>=1.25,<2.0
+scikit-learn>=1.6,<2.0
+python-dotenv>=1.0,<2.0
+
+# Optional alternative model providers/local embeddings:
+# langchain-anthropic>=1.0,<2.0
+# langchain-google-genai>=3.0,<5.0
+# langchain-ollama>=1.0,<2.0
+# langchain-community>=0.4,<1.0
+
+# Optional lesson-specific packages:
+# rank-bm25>=0.2.2,<1.0           # module 05 optional BM25 package
+# sentence-transformers>=3.4,<6.0  # module 06 cross-encoder
+# networkx>=3.4,<4.0              # module 10 graph traversal
+# openai>=1.0,<3.0                # module 11 direct vision call
+
+# Optional evaluation frameworks (module 14):
+# ragas>=0.3,<1.0
+# deepeval>=3.0,<4.0
