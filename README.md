@@ -25,7 +25,8 @@ Advance RAG/
 │   │   └── technova_graph.csv  # TechNova entity/relationship data
 │   └── output/                 # Generated outputs
 ├── src/
-│   └── 1_Document_Ingestion/   # Stage 1: getting clean, structured data in
+│   ├── 1_Document_Ingestion/   # Stage 1: getting clean, structured data in
+│   └── 2_Advance_Chunking/     # Stage 2: splitting documents without losing context
 ├── requirements.txt
 ├── .env                        # API keys (not committed)
 └── README.md
@@ -40,11 +41,11 @@ More stage folders will be added under `src/` as the series grows.
 1. Clone the repository
 2. Create and activate a virtual environment
 3. Install dependencies: `pip install -r requirements.txt`
-4. Create a `.env` file for API keys (Stage 1 needs none, everything runs locally)
+4. Create a `.env` file for API keys (Stages 1 and 2 need none, everything runs locally)
 5. Add TechNova PDFs to `data/input/pdfs/` and documents to `data/input/documents/`
-6. Run any file directly, for example: `python src/1_Document_Ingestion/advance_pdf_parsing.py`
+6. Run any file directly, for example: `python src/2_Advance_Chunking/parent_child_chunking.py`
 
-Every Stage 1 script has a built-in fallback sample, so it runs even when the input folders are empty.
+Every script has a built-in fallback sample, so it runs even when the input folders are empty.
 
 ---
 
@@ -105,9 +106,68 @@ Builds useful metadata for each document so retrieval can filter and cite source
 
 ---
 
+## Stage 2. Advance Chunking  (`src/2_Advance_Chunking`)
+
+Fixed-size chunking is the usual starting point, and it is where many RAG problems begin. A chunk can cut a section in half, lose the heading it belongs to, or be too small to answer a question on its own. This stage compares five strategies. Each one fixes a different failure, and none of them is the best choice for every document.
+
+All demos are dependency-free: retrieval is simulated with simple word-overlap scoring, so the effect of each chunking strategy is visible without embeddings or an API key.
+
+### structural_chunking.py
+
+Chunks Markdown by its heading structure, then enforces a size limit.
+
+- Tracks the heading path while reading (for example `NovaFlow > Deployment`) and groups paragraphs under their section
+- Splits oversized paragraphs and packs paragraphs into chunks of at most `max_words`
+- Every chunk carries its section breadcrumb as metadata
+- Best for: documentation, manuals and policies with clear headings
+
+### sentence_window_chunking.py
+
+Indexes single sentences but returns the sentence together with its neighbors.
+
+- `build_window`: creates one record per sentence with a `focus` sentence and a `window` of surrounding sentences (`radius` controls how many on each side)
+- Search matches the precise sentence, the LLM receives the wider window
+- Best for: dense text where the answer sentence depends on the sentences around it
+
+### parent_child_chunking.py
+
+Search on small pieces, answer with large ones.
+
+- `build_hierarchy`: paragraphs become parents (with a stable hash ID), sentences become children linked to their parent
+- A query is matched against child sentences, then expanded to the full parent paragraph
+- Small children give precise matching, large parents give enough context for generation
+- Best for: long documents where precision and context are both needed
+
+### semantic_chunking.py
+
+Splits where the topic changes instead of at a fixed size.
+
+- Each sentence becomes a word-count vector and neighboring sentences are compared with cosine similarity
+- If similarity is above the threshold the sentence joins the current chunk, otherwise a new chunk starts
+- In production, word counts would be replaced with embeddings for the same idea
+- Best for: text without headings, where topics shift inside long passages
+
+### contextual_chunking.py
+
+Adds document and section context to each chunk before it is embedded.
+
+- `contextualize`: prefixes every line with `Document: <title>, Section: <section>`
+- The original text is kept for display, and the context-rich `embedding_text` is used for search
+- The demo shows a query matching better with context than without
+- Best for: short chunks that lose meaning once separated from their section
+
+### Key takeaways
+
+- Chunking decides what the retriever can find, so it deserves as much care as the model
+- Small chunks are better for matching, large chunks are better for answering. Parent-child and sentence-window get both
+- Context attached to a chunk (headings, titles) often matters more than the chunk size itself
+- There is no single best strategy: the right choice depends on the document type and the questions asked
+
+---
+
 ## What Comes Next
 
-More stages (chunking, retrieval, re-ranking, evaluation and beyond) will be added to `src/` step by step.
+More stages (retrieval, re-ranking, evaluation and beyond) will be added to `src/` step by step.
 
 - Agentic AI: LangGraph, MCP, multi-agent systems  https://github.com/Itz-Me-Sumit/Agentic-AI
 
