@@ -26,7 +26,8 @@ Advance RAG/
 │   └── output/                 # Generated outputs
 ├── src/
 │   ├── 1_Document_Ingestion/   # Stage 1: getting clean, structured data in
-│   └── 2_Advance_Chunking/     # Stage 2: splitting documents without losing context
+│   ├── 2_Chunking_Strategies/  # Stage 2: splitting documents without losing context
+│   └── 3_Indexing_Strategies/  # Stage 3: deciding what gets stored and searched
 ├── requirements.txt
 ├── .env                        # API keys (not committed)
 └── README.md
@@ -41,9 +42,9 @@ More stage folders will be added under `src/` as the series grows.
 1. Clone the repository
 2. Create and activate a virtual environment
 3. Install dependencies: `pip install -r requirements.txt`
-4. Create a `.env` file for API keys (Stages 1 and 2 need none, everything runs locally)
+4. Create a `.env` file for API keys (Stages 1 to 3 need none, everything runs locally)
 5. Add TechNova PDFs to `data/input/pdfs/` and documents to `data/input/documents/`
-6. Run any file directly, for example: `python src/2_Advance_Chunking/parent_child_chunking.py`
+6. Run any file directly, for example: `python src/3_Indexing_Strategies/raptor.py`
 
 Every script has a built-in fallback sample, so it runs even when the input folders are empty.
 
@@ -106,7 +107,7 @@ Builds useful metadata for each document so retrieval can filter and cite source
 
 ---
 
-## Stage 2. Advance Chunking  (`src/2_Advance_Chunking`)
+## Stage 2. Chunking Strategies  (`src/2_Chunking_Strategies`)
 
 Fixed-size chunking is the usual starting point, and it is where many RAG problems begin. A chunk can cut a section in half, lose the heading it belongs to, or be too small to answer a question on its own. This stage compares five strategies. Each one fixes a different failure, and none of them is the best choice for every document.
 
@@ -162,6 +163,71 @@ Adds document and section context to each chunk before it is embedded.
 - Small chunks are better for matching, large chunks are better for answering. Parent-child and sentence-window get both
 - Context attached to a chunk (headings, titles) often matters more than the chunk size itself
 - There is no single best strategy: the right choice depends on the document type and the questions asked
+
+---
+
+## Stage 3. Indexing Strategies  (`src/3_Indexing_Strategies`)
+
+Basic RAG stores one flat collection of raw chunks, with one vector per chunk. That creates three problems. Broad questions retrieve small details without the overview that frames them. Users ask questions, while documents are written as statements, so the wording rarely matches. And a chunk on its own often loses the context it needs. This stage changes what gets stored and searched, not how the text is split.
+
+All demos run locally with simple keyword overlap or TF-IDF, no API key needed. In production, the same ideas use dense embeddings, and an LLM generates the summaries and questions. The hierarchy and lineage logic stays deterministic.
+
+### contextual_embeddings.py
+
+Compares the same passages embedded two ways: raw, and with document and section context added.
+
+- `tfidf_vectors`: builds a TF-IDF vector for every text from scratch (term frequency times inverse document frequency)
+- `similarity`: cosine similarity between two sparse vectors
+- Each line is indexed twice: as it is, and prefixed with `TechNova Document <title>; section <section>`
+- The query is scored against both versions, so the effect of the added context is visible in the score
+- Best for: passages like "It runs every fifteen minutes", where the key subject lives only in the heading
+
+### hierarchical_indexing.py
+
+Builds document, section and paragraph levels, then searches from coarse to fine.
+
+- `build_tree`: reads Markdown headings and creates a tree with stable IDs (hash of title and position) and a `parent_id` on every node
+- Each section gets a summary, and the document gets a summary listing its sections
+- Search first selects the best section summary, then looks for the best paragraph only inside that section
+- Prints the full lineage (`document -> section -> detail`) and a citation-style reference such as `Document > Section [id]`
+- Best for: long manuals and naturally nested knowledge
+
+### hypothetical_questions_indexing.py
+
+Indexes questions that each passage could answer, instead of the passage itself.
+
+- `questions_for`: generates likely questions for a passage (rule-based in this demo, LLM-generated in production)
+- Each question is stored with the `doc_id` of its source passage
+- A user query is matched against the generated questions, and the original passage is returned through `doc_id`
+- A question matches another question better than a statement does
+- Best for: FAQ-style and factual content where users ask direct questions
+
+### multi_vector_indexing.py
+
+Stores several representations of one document and searches across all of them.
+
+- `build_index`: creates five representations per document: title, summary (first sentence), top keywords, a likely question and the full body
+- `rank_documents`: scores every representation, then keeps only the best one per source document
+- Prints how many representation hits were reduced to unique documents, and which representation matched
+- Best for: documents that users find in different ways, by name, by topic or by question
+
+### raptor.py
+
+A simplified version of RAPTOR: a tree of summaries built bottom-up.
+
+- `build_tree`: starts with the original passages as leaves, pairs each node with its most similar partner, and writes a summary parent for every pair. This repeats until one root remains
+- `summarize`: deterministic summary with product names and top keywords (an LLM would write this in production)
+- Search finds the best node at every level, picks the strongest summary, then `descend` follows the best-matching children down to a leaf
+- Detailed questions are answered from leaves, broad questions from higher-level summaries
+- Best for: long corpora where questions range from specific facts to overall themes
+
+### Key takeaways
+
+- What you store decides what you can find. Indexing is a design choice, not a default
+- Summaries and generated questions help match how people ask, not how documents are written
+- Keep lineage (parent IDs) so every answer can cite its exact source
+- Deduplicate when one document has several representations
+- Again, there is no single best strategy: pick the index based on the document structure and the type of questions
 
 ---
 
