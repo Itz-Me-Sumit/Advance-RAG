@@ -27,7 +27,8 @@ Advance RAG/
 ├── src/
 │   ├── 1_Document_Ingestion/   # Stage 1: getting clean, structured data in
 │   ├── 2_Chunking_Strategies/  # Stage 2: splitting documents without losing context
-│   └── 3_Indexing_Strategies/  # Stage 3: deciding what gets stored and searched
+│   ├── 3_Indexing_Strategies/  # Stage 3: deciding what gets stored and searched
+│   └── 4_Query_Transformation/ # Stage 4: fixing the question before retrieval
 ├── requirements.txt
 ├── .env                        # API keys (not committed)
 └── README.md
@@ -42,9 +43,9 @@ More stage folders will be added under `src/` as the series grows.
 1. Clone the repository
 2. Create and activate a virtual environment
 3. Install dependencies: `pip install -r requirements.txt`
-4. Create a `.env` file for API keys (Stages 1 to 3 need none, everything runs locally)
+4. Create a `.env` file for API keys (Stages 1 to 4 need none, everything runs locally)
 5. Add TechNova PDFs to `data/input/pdfs/` and documents to `data/input/documents/`
-6. Run any file directly, for example: `python src/3_Indexing_Strategies/raptor.py`
+6. Run any file directly, for example: `python src/4_Query_Transformation/hyde.py`
 
 Every script has a built-in fallback sample, so it runs even when the input folders are empty.
 
@@ -231,9 +232,85 @@ A simplified version of RAPTOR: a tree of summaries built bottom-up.
 
 ---
 
+## Stage 4. Query Transformation  (`src/4_Query_Transformation`)
+
+Stages 2 and 3 improved the data side. This stage improves the question side. The user's question is rarely the best search query: it can be conversational ("could you tell me..."), use different words than the documents, contain two questions in one, be too specific to find the background, or belong to only one part of the knowledge base. Each technique here transforms the query before retrieval.
+
+All demos run locally with simple keyword overlap and no API key. In production, an LLM generates the rewrites, hypothetical answers and subqueries, and routing can use a classifier or an LLM. The retrieval logic around them stays the same.
+
+### query_rewriting.py
+
+Turns a conversational question into a focused search query.
+
+- `rewrite`: removes filler phrases ("could you", "tell me"), expands short aliases to canonical product terms (for example `flow` becomes `NovaFlow Workflow`) and strips punctuation
+- The rewritten query is then used for retrieval instead of the raw question
+- Best for: chat-style input, abbreviations and internal jargon
+
+### multi_query_retrieval.py
+
+Searches with several phrasings of the same question.
+
+- `generate_queries`: produces the original query plus rephrased versions (hard-coded here, LLM-generated in production)
+- Every variation is searched, and the results are merged into a set of unique documents
+- Different wording reaches documents that one phrasing would miss
+- Best for: vague questions and corpora with inconsistent vocabulary
+
+### rag_fusion.py
+
+Multi-query retrieval with Reciprocal Rank Fusion (RRF) to combine the rankings.
+
+- Each query produces its own ranked list, and documents with zero overlap are dropped
+- `fused[doc] += 1 / (k + position)` with `k = 60` gives every document a score from each list it appears in
+- Documents that rank well across several queries rise to the top, without needing comparable scores between queries
+- Best for: merging results from several queries or several retrievers into one final order
+
+### query_decomposition.py
+
+Splits a multi-part question into focused subqueries.
+
+- `decompose`: splits only where "and" is followed by a new question word, so phrases like "research and development" stay intact
+- Each subquery retrieves its own best evidence, and the evidence is combined at the end
+- Best for: questions that ask two or more things at once
+
+### step_back_prompting.py
+
+Asks a broader background question next to the specific one.
+
+- `step_back`: converts a specific question into a more general one (for example from a reviewer's permission to the access governance principles)
+- The broad query retrieves the principle, the specific query retrieves the exact evidence
+- Best for: questions whose answer depends on a general rule or concept
+
+### hyde.py
+
+Hypothetical Document Embeddings: search with a hypothetical answer instead of the question.
+
+- `hypothetical_answer`: writes a passage that looks like the answer (rule-based here, LLM-generated in production)
+- The hypothetical passage is used only as a search probe, because an answer is closer in wording to documents than a question is
+- The final output states clearly that only the retrieved source counts as evidence, never the generated text
+- Best for: short or vague questions where question wording and document wording differ
+
+### query_routing.py
+
+Chooses which corpus to search before retrieving.
+
+- `route`: counts routing keywords per corpus (security, operations, billing) and selects the highest. The score is matched-term coverage, not a calibrated confidence
+- If nothing matches, the route is `unknown` and the fallback is a clarifying question or a search across all authorized sources
+- `retrieve` then searches only the selected corpus
+- Best for: knowledge bases split into domains, where searching everything adds noise and cost
+
+### Key takeaways
+
+- The user's question is rarely the best search query, so transform it before retrieval
+- A transformed query is a search probe, only retrieved sources are evidence
+- More queries improve recall but add cost and latency, so use fusion to keep the final list clean
+- Route first when the knowledge base has clear domains
+- There is no single best technique: rewriting suits messy input, decomposition suits multi-part questions, step-back suits conceptual ones, HyDE suits vocabulary mismatch
+
+---
+
 ## What Comes Next
 
-More stages (retrieval, re-ranking, evaluation and beyond) will be added to `src/` step by step.
+More stages (retrieval, re-ranking, generation, evaluation and beyond) will be added to `src/` step by step.
 
 - Agentic AI: LangGraph, MCP, multi-agent systems  https://github.com/Itz-Me-Sumit/Agentic-AI
 
