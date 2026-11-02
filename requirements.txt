@@ -8,6 +8,8 @@ pypdf>=5.0,<7.0
 pymupdf>=1.25,<2.0
 scikit-learn>=1.6,<2.0
 python-dotenv>=1.0,<2.0
+rank-bm25
+scikit-learn
 
 # Optional alternative model providers/local embeddings:
 # langchain-anthropic>=1.0,<2.0
